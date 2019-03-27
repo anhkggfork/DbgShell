@@ -630,13 +630,13 @@ namespace MS.Dbg
         [Flags]
         public enum IndentAndWrapOptions
         {
-            Default = 0,
-            NoWordBreaking,
-            TruncateInsteadOfWrap,
-            FirstLineAlreadyIndented,
-            DoNotIndentContinuationLines,
-            AddLineLeadingSpaceToAddtlContinuationIndent, // TODO: could this result in a pathological situation if
-                                                          // leading space is longer than the entire outputWidth
+            Default                                      = 0,
+            NoWordBreaking                               = 0x01,
+            TruncateInsteadOfWrap                        = 0x02,
+            FirstLineAlreadyIndented                     = 0x04,
+            DoNotIndentContinuationLines                 = 0x08,
+            AddLineLeadingSpaceToAddtlContinuationIndent = 0x10, // TODO: could this result in a pathological situation if
+                                                                 // leading space is longer than the entire outputWidth
         }
 
         public static string IndentAndWrap( string str,
@@ -722,7 +722,7 @@ namespace MS.Dbg
                 return _stillInBounds();
             }
 
-            void _completeLineAndIndent( int numSpaces )
+            void _completeLineAndIndent( int numSpaces, bool isWrap )
             {
                 sb.Append( '\n' );
                 _insertIndent( numSpaces );
@@ -734,8 +734,12 @@ namespace MS.Dbg
                 lastSpaceOrTabSrcIdx = -1;
                 lastSpaceOrTabDstIdx = -1;
 
-                inLeadingSpace = true;
-                leadingSpaceLen = 0;
+                if( !isWrap )
+                {
+                    // We're actually on the next line of input.
+                    inLeadingSpace = true;
+                    leadingSpaceLen = 0;
+                }
             }
 
             void _appendContentChar( char c )
@@ -782,7 +786,7 @@ namespace MS.Dbg
                     // _weHaveConsumedAllAvailableOutputWidth case, because the newline
                     // does not consume available space (but rather resets it).
 
-                    _completeLineAndIndent( indent );
+                    _completeLineAndIndent( indent, isWrap: false );
                 }
                 else if( _weHaveConsumedAllAvailableOutputWidth() )
                 {
@@ -804,6 +808,8 @@ namespace MS.Dbg
                         // Rewind and slap an ellipsis on the end:
                         sb.Length = sb.Length - 1;
                         sb.Append( (char) 0x2026 ); // ellipsis
+
+                        // TODO: Uh... what's this supposed to do? Do we need to seek the source to the next line now?
                     }
                     else
                     {
@@ -823,7 +829,7 @@ namespace MS.Dbg
                             totalIndent += leadingSpaceLen;
                         }
                     }
-                    _completeLineAndIndent( totalIndent );
+                    _completeLineAndIndent( totalIndent, isWrap: true );
 
                     if( !backtracked )
                     {
@@ -1527,6 +1533,8 @@ namespace MS.Dbg
 
         private static List<CaStringUtilIndentAndWrapTestCase> sm_indentAndWrapTests = new List<CaStringUtilIndentAndWrapTestCase>()
         {
+            /*
+            */
             new CaStringUtilIndentAndWrapTestCase( null,
                                                    outputWidth: 4,
                                                    typeof( ArgumentNullException ) ),
@@ -1539,9 +1547,17 @@ namespace MS.Dbg
                                                    outputWidth: 4,
                                                    expectedOutput: "1 2\n3 4\n5 6\n7 8\n9" ),
 
+            new CaStringUtilIndentAndWrapTestCase( " 1 2 3 4 5 6 7 8 9",
+                                                   outputWidth: 4,
+                                                   expectedOutput: " 1\n2 3\n4 5\n6 7\n8 9" ),
+
             new CaStringUtilIndentAndWrapTestCase( "12 34 56 78 90",
                                                    outputWidth: 4,
                                                    expectedOutput: "12\n34\n56\n78\n90" ),
+
+            new CaStringUtilIndentAndWrapTestCase( " 12 34 56 78 90",
+                                                   outputWidth: 4,
+                                                   expectedOutput: " 12\n34\n56\n78\n90" ),
 
             new CaStringUtilIndentAndWrapTestCase( "123 456 789 0ab",
                                                    outputWidth: 4,
@@ -1550,6 +1566,21 @@ namespace MS.Dbg
             new CaStringUtilIndentAndWrapTestCase( "1234 5678 90ab",
                                                    outputWidth: 4,
                                                    expectedOutput: "123\n4\n567\n8\n90a\nb" ),
+
+            new CaStringUtilIndentAndWrapTestCase( " 1 2 3 4 5 6 7 8 9",
+                                                   outputWidth: 4,
+                                                   options: IndentAndWrapOptions.AddLineLeadingSpaceToAddtlContinuationIndent,
+                                                   indent: 1,
+                                                   addtlContinuationIndent: 0,
+                                                   expectedOutput: "  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9" ),
+
+            new CaStringUtilIndentAndWrapTestCase( "1 2 3 4 5 6 7 8 9",
+                                                   outputWidth: 4,
+                                                   options: IndentAndWrapOptions.Default,
+                                                   indent: 2,
+                                                   addtlContinuationIndent: 0,
+                                                   expectedOutput: "  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9" ),
+
         };
 
 
